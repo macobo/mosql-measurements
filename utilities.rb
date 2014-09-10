@@ -1,4 +1,5 @@
 require 'logger'
+require 'benchmark'
 
 class String
   def self.random(len=32, random=nil, character_set = ["A".."Z", "a".."z", "0".."9"])
@@ -22,7 +23,15 @@ end
 
 module Utilities
   def log
-    @@logger ||= Log4r::Logger.new("Mosql::Measurements")
+    return @logger unless @logger.nil?
+    @logger = Log4r::Logger.new("Mosql::Measurements")
+    outputter = Log4r::StdoutOutputter.new(STDERR)
+    outputter.formatter = Log4r::PatternFormatter.new(
+      :pattern => "%d [%l]: %M",
+      :date_pattern => "%Y-%m-%d %H:%M:%S.%L")
+
+    @logger.outputters = outputter
+    @logger
   end
 
   def random
@@ -67,6 +76,23 @@ module Utilities
       else
         yield [:delete, nil]
       end
+    end
+  end
+
+  def measure(log_result=true, &blk)
+    results = Benchmark.measure { blk.call }
+    if log_result
+      log.info(results.format("Took %t seconds (real: %r, user: %u, system: %y)"))
+    end
+    results
+  end
+
+  def batch(batch_size, total)
+    at = 0
+    while at < total
+      endpoint = [at+batch_size-1, total].min
+      yield [at, endpoint]
+      at = endpoint+1
     end
   end
 end

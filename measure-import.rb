@@ -23,7 +23,23 @@ class MeasureImport
       log.warn("#{mongo_uri} is not a replset!")
     end
 
+    collection = mongo['test_mosql_measurements']['test_collection']
 
+    log.info("Current size of collection is #{collection.size}.")
+    collection.remove()
+
+    log.info("Populating mongo collection with #{n_rows} objects")
+
+    @object_ids = []
+    measure do
+      batch(50000, n_rows) do |start, endpoint|
+        log.debug("Batch inserting [#{start}...#{endpoint}]")
+        @objects = (start..endpoint).map { |n| random_record }
+        @object_ids.concat(collection.insert(@objects))
+      end
+    end
+
+    log.info("Collection size is now #{collection.size}")
   end
 
   def self.initialize_from_argv
