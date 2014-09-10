@@ -1,4 +1,5 @@
 require 'mosql'
+require 'mosql/cli'
 require 'optparse'
 require './utilities'
 
@@ -6,15 +7,62 @@ require './utilities'
 class MeasureImport
   include Utilities
 
-  attr_reader :mongo_uri, :sql_uri, :n_rows
-  def initialize(mongo_uri, sql_uri, n_rows)
-    @mongo_uri = mongo_uri
-    @sql_uri = sql_uri
-    @n_rows = n_rows
+  attr_reader :mongo_uri, :sql_uri, :n_rows, :options
+  def initialize(options)
+    @mongo_uri = options[:mongo]
+    @sql_uri = options[:sql]
+    @n_rows = options[:n_rows]
+    @options = options
   end
 
   def mongo
     @_upstream_client ||= Mongo::MongoClient.from_uri(mongo_uri)
+  end
+
+  def sql
+    @_upstream_sql ||= MoSQL::SQLAdapter.new(schema, sql_uri)
+  end
+
+  def schema
+    @_schema ||= MoSQL::Schema.new(YAML.load_file('collection.yaml'))
+  end
+
+  def create_collection!(collection)
+    log.info("Populating mongo collection with #{n_rows} objects")
+
+    @object_ids = []
+    measure do
+      batch(50000, n_rows) do |start, endpoint|
+        log.debug("Batch inserting/generating [#{start}...#{endpoint}]")
+        @objects = (start..endpoint).map { |n| random_record }
+        collection.insert(@objects)
+      end
+    end
+  end
+
+  def setup_mosql
+    metadata_table = MoSQL::Tailer.create_table(sql.db, 'mosql_tailers')
+
+    tailer = MoSQL::Tailer.new([mongo], :existing, metadata_table,
+                                :service => "measurements-import")
+
+    streamer = MoSQL::Streamer.new(
+                :options =>{:reimport => true},
+                :tailer  => tailer,
+                :mongo   => mongo,
+                :sql     => sql,
+                :schema  => schema)
+  end
+
+  def mosql_import!
+    # largely copied from cli.rb in mosql
+    streamer = setup_mosql
+    sql.db.drop_table?('blog_posts')
+
+    log.info("Mosql setup done, importing")
+    measure do
+      streamer.import
+    end
   end
 
   def run!
@@ -26,27 +74,21 @@ class MeasureImport
     collection = mongo['test_mosql_measurements']['test_collection']
 
     log.info("Current size of collection is #{collection.size}.")
-    collection.remove()
-
-    log.info("Populating mongo collection with #{n_rows} objects")
-
-    @object_ids = []
-    measure do
-      batch(50000, n_rows) do |start, endpoint|
-        log.debug("Batch inserting [#{start}...#{endpoint}]")
-        @objects = (start..endpoint).map { |n| random_record }
-        @object_ids.concat(collection.insert(@objects))
-      end
+    if collection.size != n_rows || options[:recreate]
+      collection.remove()
+      create_collection!(collection)
+      log.info("Collection size is now #{collection.size}")
     end
 
-    log.info("Collection size is now #{collection.size}")
+    mosql_import!
   end
 
   def self.initialize_from_argv
     options = {
       :sql    => 'postgres:///',
       :mongo  => 'mongodb://localhost',
-      :rows   => 1000000
+      :n_rows   => 1000000,
+      :reimport => false
     }
     optparse = OptionParser.new do |opts|
       opts.banner = "Usage: #{$0} [options] "
@@ -64,14 +106,18 @@ class MeasureImport
         options[:mongo] = uri
       end
 
-      opts.on("-n [rows]", "Number of rows to create") do |n|
-        options[:rows] = n.to_i
+      opts.on("-n [n_rows]", "Number of rows to create") do |n|
+        options[:n_rows] = n.to_i
+      end
+
+      opts.on("--recreate", "Recreate mongo collection (when doing import benchmark)") do
+        options[:recreate] = true
       end
     end
 
     optparse.parse!
 
-    MeasureImport.new(options[:mongo], options[:sql], options[:rows])
+    MeasureImport.new(options)
   end
 end
 

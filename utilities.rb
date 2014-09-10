@@ -31,11 +31,14 @@ module Utilities
       :date_pattern => "%Y-%m-%d %H:%M:%S.%L")
 
     @logger.outputters = outputter
+
+    # Sigh, hack to try to get mosql logger to work
+    # MoSQL::CLI.new([]).parse_args
     @logger
   end
 
-  def random
-    @random ||= Random.new 199
+  def random(seed=99)
+    @random ||= Random.new seed
   end
 
   def random_record
