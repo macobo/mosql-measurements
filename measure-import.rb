@@ -1,17 +1,13 @@
 require './measure-common'
 
 class MeasureImport < MeasureCommon
-  include Utilities
-
-  attr_reader :mongo_uri, :sql_uri, :n_rows, :options
+  attr_reader :n_rows
   def initialize(options)
-    @mongo_uri = options[:mongo]
-    @sql_uri = options[:sql]
-    @n_rows = options[:n_rows]
+    @n_rows = options[:rows] || 1000000
     @options = options
   end
 
-  def create_collection!(collection)
+  def create_collection!
     log.info("Populating mongo collection with #{n_rows} objects")
 
     @object_ids = []
@@ -26,7 +22,7 @@ class MeasureImport < MeasureCommon
 
   def mosql_import!
     # largely copied from cli.rb in mosql
-    streamer = setup_mosql
+    streamer = setup_mosql[0]
     sql.db.drop_table?('blog_posts')
 
     log.info("Mosql setup done, importing")
@@ -38,15 +34,13 @@ class MeasureImport < MeasureCommon
   def run!
     config = mongo['admin'].command(:ismaster => 1)
     unless config['setName']
-      log.warn("#{mongo_uri} is not a replset!")
+      log.warn("#{mongo} is not a replset!")
     end
-
-    collection = mongo['test_mosql_measurements']['test_collection']
 
     log.info("Current size of collection is #{collection.size}.")
     if collection.size != n_rows || options[:recreate]
       collection.remove()
-      create_collection!(collection)
+      create_collection!
       log.info("Collection size is now #{collection.size}")
     end
 

@@ -33,12 +33,15 @@ module Utilities
     @logger.outputters = outputter
 
     # Sigh, hack to try to get mosql logger to work
-    # MoSQL::CLI.new([]).parse_args
+    MoSQL::CLI.new(['-v', '-v']).parse_args
     @logger
   end
 
   def random(seed=99)
-    @random ||= Random.new seed
+    if @random.nil? || seed != @oldseed
+      @random ||= Random.new seed
+    end
+    @random
   end
 
   def random_record
@@ -64,20 +67,20 @@ module Utilities
       ops.each { |op| p[op] ||= (left / p.count) }
     end
 
-    log.info("Probabilities are: #{p}")
+    log.debug("Probabilities are: #{p}")
     # fit to ranges
     p[:update] += p[:insert]
     p[:delete] += p[:insert] + p[:update]
 
-    (1...total).each do |_|
+    (0...total).each do |i|
       t = random.rand
 
       if t <= p[:insert]
-        yield [:insert, random_record]
+        yield [i, :insert, random_record]
       elsif t <= p[:update]
-        yield [:update, random_record]
+        yield [i, :update, random_record]
       else
-        yield [:delete, nil]
+        yield [i, :delete, nil]
       end
     end
   end
@@ -90,12 +93,31 @@ module Utilities
     results
   end
 
+  def measure_rubyprof
+    result = RubyProf.profile do 
+      yield
+    end
+    printer = RubyProf::GraphPrinter.new(result)
+    printer.print(STDOUT, {})
+  end
+
   def batch(batch_size, total)
     at = 0
     while at < total
       endpoint = [at+batch_size-1, total].min
       yield [at, endpoint]
       at = endpoint+1
+    end
+  end
+
+  def fork_pool(n_forks, &blk)
+    processes = (1..n_forks).map do |i|
+      Process.fork { blk.call(i) }
+    end
+
+    processes.each do |pid|
+      Process.wait(pid)
+      log.debug("Child #{pid} exited")
     end
   end
 end
