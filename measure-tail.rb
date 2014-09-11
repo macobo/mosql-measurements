@@ -1,7 +1,6 @@
 require './measure-common'
 require 'mongoriver'
 require 'set'
-require 'ruby-prof'
 
 # Strategy here is to assume the data has been created and imported by mosql.
 # The following steps are:
@@ -86,7 +85,8 @@ class MeasureTail < MeasureCommon
 
     @_last_op = nil
     has_more = true
-    measure do 
+    # measure do
+    measure_rubyprof("tail") do
       while has_more
         has_more = tailer.stream(1000) do |op|
           @_last_op = op

@@ -94,12 +94,16 @@ module Utilities
     results
   end
 
-  def measure_rubyprof
+  def measure_rubyprof(filename)
     result = RubyProf.profile do 
       yield
     end
-    printer = RubyProf::GraphPrinter.new(result)
-    printer.print(STDOUT, {})
+    printer = RubyProf::GraphHtmlPrinter.new(result)
+    printer.print(File.open(filename+"-graph.html", "w"))
+    printer = RubyProf::GraphHtmlPrinter.new(result)
+    printer.print(File.open(filename+"-graph-self.html", "w"), {:sort_method => :self_time})
+    printer = RubyProf::CallStackPrinter.new(result)
+    printer.print(File.open(filename+"-stack.html", "w"), {})
   end
 
   def batch(batch_size, total)
