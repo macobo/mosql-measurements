@@ -26,7 +26,7 @@ class MeasureImport < MeasureCommon
     sql.db.drop_table?('blog_posts')
 
     log.info("Mosql setup done, importing")
-    measure do
+    measure_rubyprof do
       streamer.import
     end
   end

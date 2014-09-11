@@ -1,5 +1,6 @@
 require 'logger'
 require 'benchmark'
+require 'ruby-prof'
 
 class String
   def self.random(len=32, random=nil, character_set = ["A".."Z", "a".."z", "0".."9"])
@@ -33,7 +34,7 @@ module Utilities
     @logger.outputters = outputter
 
     # Sigh, hack to try to get mosql logger to work
-    MoSQL::CLI.new(['-v', '-v']).parse_args
+    MoSQL::CLI.new([]).parse_args
     @logger
   end
 
@@ -102,9 +103,9 @@ module Utilities
   end
 
   def batch(batch_size, total)
-    at = 0
-    while at < total
-      endpoint = [at+batch_size-1, total].min
+    at = 1
+    while at <= total
+      endpoint = [at+batch_size, total].min
       yield [at, endpoint]
       at = endpoint+1
     end

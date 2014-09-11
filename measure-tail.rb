@@ -72,7 +72,6 @@ class MeasureTail < MeasureCommon
     end
 
     # largely copied from streamer.rb
-    log.info("Starting tailing")
 
     last_timestamp = Mongoriver::Tailer.new([mongo], :existing).latest_oplog_entry["ts"]
     # log.info("End time: #{last_timestamp}")
@@ -80,6 +79,10 @@ class MeasureTail < MeasureCommon
 
     streamer, tailer = setup_mosql
     tailer.tail()
+
+    sql.db.run "CREATE TABLE blog_posts_backup AS TABLE blog_posts;"
+
+    log.info("Starting tailing")
 
     @_last_op = nil
     has_more = true
@@ -95,6 +98,11 @@ class MeasureTail < MeasureCommon
         log.debug("Behind #{behind} seconds. #{has_more}")
       end
     end
+
+
+    log.info("Dropping changes!")
+    sql.db.drop_table "blog_posts"
+    sql.db.rename_table("blog_posts_backup", "blog_posts")
   end
 end
 
