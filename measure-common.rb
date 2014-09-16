@@ -13,7 +13,7 @@ class MeasureCommon
   end
 
   def sql
-    @_upstream_sql ||= MoSQL::SQLAdapter.new(schema, options[:sql])
+    @_upstream_sql = MoSQL::SQLAdapter.new(schema, options[:sql])
   end
 
   def schema

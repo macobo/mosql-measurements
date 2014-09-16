@@ -28,7 +28,7 @@ module Utilities
     @logger = Log4r::Logger.new("Mosql::Measurements")
     outputter = Log4r::StdoutOutputter.new(STDERR)
     outputter.formatter = Log4r::PatternFormatter.new(
-      :pattern => "%d [%l]: %M",
+      :pattern => "%p %d [%l]: %M",
       :date_pattern => "%Y-%m-%d %H:%M:%S.%L")
 
     @logger.outputters = outputter
