@@ -21,34 +21,41 @@ class MeasureTail < MeasureCommon
     @_oplog = mongo['local']['oplog.rs']
   end
 
-  def populate_oplog!(size)
-    probabilities = {:insert => 0.7, :update => 0.2, :delete => 0.1}
+  def populate_oplog!(size, ops=nil)
+    probabilities = {:insert => 0.9, :update => 0, :delete => 0.1}
 
     # small chance of them collinding, but oh well.
-    alive_ids = Set.new #collection.find({}, :limit => 10).to_a.map { |r| r['_id'].to_s }.to_set
+    #collection.find({}, :limit => 10).to_a.map { |r| r['_id'].to_s }.to_set
     treshold = 0
-    random_operation_generator(size, probabilities) do |at, op, record|
-      if at > treshold
-        p = 100.0 * (at - 1) / size
-        # log.debug("Child #{child_id} is #{p}% done.")
-        treshold = (p + 20) / 100.0 * size
+
+    namespaces.each do |ns|
+      alive_ids = Set.new
+      operation_generator(size, ops) do |at, op, record|
+      #random_operation_generator(size, probabilities) do |at, op, record|
+        if at > treshold
+          p = 100.0 * (at - 1) / size
+          # log.debug("Child #{child_id} is #{p}% done.")
+          treshold = (p + 20) / 100.0 * size
+        end
+
+        case op
+        when :insert
+          id = collection(ns).insert(record).to_s
+          alive_ids << id
+          # log.debug("INSERT #{record}, #{id}")
+        when :update
+          id = alive_ids.take(1).first
+          collection(ns).update({"_id" => BSON::ObjectId(id)}, record)
+          # log.debug("UPDATE #{record}, #{id}")
+        when :delete
+          id = alive_ids[ns].take(1).first
+          alive_ids.delete(id)
+          collection(ns).remove({"_id" => BSON::ObjectId(id)})
+          # log.debug("DELETE #{record}, #{id}")
+        end
       end
 
-      case op
-      when :insert
-        id = collection.insert(record).to_s
-        alive_ids << id
-        # log.debug("INSERT #{record}, #{id}")
-      when :update
-        id = alive_ids.take(1).first
-        collection.update({"_id" => BSON::ObjectId(id)}, record)
-        # log.debug("UPDATE #{record}, #{id}")
-      when :delete
-        id = alive_ids.take(1).first
-        alive_ids.delete(id)
-        collection.remove({"_id" => BSON::ObjectId(id)})
-        # log.debug("DELETE #{record}, #{id}")
-      end
+      log.info("Filling oplog of #{ns} with #{size} done")
     end
   end
 
@@ -63,7 +70,7 @@ class MeasureTail < MeasureCommon
           m.random(i+99)
 
           # m.log.info("child #{i} started.")
-          m.populate_oplog!(oplog_size / processes)
+          m.populate_oplog!(oplog_size / processes, [[:insert, 10], [:delete, 10]])
           m.log.info("child #{i} finished.")
         end
       end
@@ -79,14 +86,15 @@ class MeasureTail < MeasureCommon
     streamer, tailer = setup_mosql
     tailer.tail()
 
+    sql.db.drop_table? "blog_posts_backup"
     sql.db.run "CREATE TABLE blog_posts_backup AS TABLE blog_posts;"
 
     log.info("Starting tailing")
 
     @_last_op = nil
     has_more = true
-    # measure do
-    measure_rubyprof("tail") do
+    #measure do
+    measure_rubyprof("tail-insert-delete") do
       while has_more
         has_more = tailer.stream(1000) do |op|
           @_last_op = op

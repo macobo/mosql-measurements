@@ -86,6 +86,27 @@ module Utilities
     end
   end
 
+  def operation_generator(total, counts)
+    # per_round = counts.map {|_, c| c}.sum
+    # unless total % per_round == 0
+    #   raise "Total must be divisable by sum of counts"
+    # end
+
+    done = 0
+    at = 0
+    i = 0
+    while done < total
+      type, count = counts[at]
+      (1..count).each do
+        yield [i, type, random_record]
+      end
+      
+      done += count
+      at = (at + 1) % counts.length
+      i += 1
+    end
+  end
+
   def measure(log_result=true, &blk)
     results = Benchmark.measure { blk.call }
     if log_result
@@ -116,7 +137,10 @@ module Utilities
   end
 
   def fork_pool(n_forks, &blk)
-    processes = (1..n_forks).map do |i|
+    if n_forks.is_a? Numeric
+      n_forks = (1..n_forks)
+    end
+    processes = n_forks.map do |i|
       Process.fork { blk.call(i) }
     end
 

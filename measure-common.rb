@@ -20,7 +20,12 @@ class MeasureCommon
     @_schema ||= MoSQL::Schema.new(YAML.load_file('collection.yaml'))
   end
 
-  def collection
+  def collection(ns=nil)
+    unless ns.nil?
+      db, coll = ns.split(".")
+      @_collections ||= {}
+      return @_collections[ns] ||= mongo[db][coll]
+    end
     @_collection ||= mongo['test_mosql_measurements']['test_collection']
   end
 
@@ -38,6 +43,7 @@ class MeasureCommon
       :sql     => sql,
       :schema  => schema)
 
+    log.info("Mosql setup done")
     [streamer, tailer]
   end
 
