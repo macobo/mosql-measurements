@@ -9,15 +9,15 @@ class MeasureCommon
 
   attr_reader :options
   def mongo
-    @_upstream_client ||= Mongo::MongoClient.from_uri(options[:mongo])
+    @_upstream_client ||= Mongo::MongoClient.from_uri(options.fetch(:mongo))
   end
 
   def sql
-    @_upstream_sql ||= MoSQL::SQLAdapter.new(schema, options[:sql])
+    @_upstream_sql ||= MoSQL::SQLAdapter.new(schema, options.fetch(:sql))
   end
 
   def schema
-    @_schema ||= MoSQL::Schema.new(YAML.load_file('collection.yaml'))
+    @_schema ||= MoSQL::Schema.new(YAML.load_file("collection#{child_id}.yaml"))
   end
 
   def collection(ns=nil)
@@ -26,15 +26,17 @@ class MeasureCommon
       @_collections ||= {}
       return @_collections[ns] ||= mongo[db][coll]
     end
-    @_collection ||= mongo['test_mosql_measurements']['test_collection']
+    @_collection ||= mongo['test_mosql_measurements']["test_collection#{child_id}"]
   end
 
   def setup_mosql
-    sql.db.drop_table?('mosql_tailers')
+    # sql.db.drop_table?('mosql_tailers')
     metadata_table = MoSQL::Tailer.create_table(sql.db, 'mosql_tailers')
 
     tailer = MoSQL::Tailer.new([mongo], :existing, metadata_table,
                                 :service => "measurements-import")
+
+    tailer.log.level = Log4r::DEBUG
 
     streamer = MoSQL::Streamer.new(
       :options =>{:reimport => true},
@@ -47,11 +49,13 @@ class MeasureCommon
     [streamer, tailer]
   end
 
-  def self.initialize_from_argv
+  def self.initialize_from_argv(child_id=0)
     options = {
       :sql     => 'postgres:///',
       :mongo   => 'mongodb://localhost',
-      :processes => 3
+      :processes => 3,
+      :outfile => self.to_s,
+      :child_id => child_id
     }
     optparse = OptionParser.new do |opts|
       opts.banner = "Usage: #{$0} [options] "
@@ -69,6 +73,11 @@ class MeasureCommon
         options[:mongo] = uri
       end
 
+
+      opts.on("--outfile [filename]", "Mongo connection string") do |filename|
+        options[:outfile] = filename
+      end
+
       opts.on("-n [rows]", "Number of rows/oplog entries to create") do |n|
         options[:rows] = n.to_i
       end
@@ -80,10 +89,15 @@ class MeasureCommon
       opts.on("--recreate", "Recreate mongo collection/oplog") do
         options[:recreate] = true
       end
+
+
+      opts.on("--child-id [x]", "Recreate mongo collection/oplog") do |n|
+        options[:child_id] = n.to_i
+      end
     end
 
-    optparse.parse!
+    optparse.parse!(ARGV.dup)
 
-    self.new(options)
+    self.new(options, options[:child_id])
   end
 end

@@ -1,10 +1,12 @@
 require './measure-common'
 
 class MeasureImport < MeasureCommon
-  attr_reader :n_rows
-  def initialize(options)
+  attr_reader :n_rows, :child_id
+  def initialize(options, child_id)
     @n_rows = options[:rows] || 1000000
     @options = options
+    @child_id = child_id
+    log.info(child_id)
   end
 
   def create_collection!
@@ -23,10 +25,10 @@ class MeasureImport < MeasureCommon
   def mosql_import!
     # largely copied from cli.rb in mosql
     streamer = setup_mosql[0]
-    sql.db.drop_table?('blog_posts')
+    sql.db.drop_table?('blog_posts#{child_id}')
 
     log.info("Mosql setup done, importing")
-    measure_rubyprof("import2") do
+    measure_rubyprof("output/import3") do
       streamer.import
     end
   end

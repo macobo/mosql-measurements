@@ -1,0 +1,12 @@
+test_mosql_measurements:
+  test_collection2:
+    :columns:
+    - id:
+      :source: _id
+      :type: TEXT
+    - number:
+      :source: nested.int
+      :type: INTEGER
+    - title: TEXT
+    :meta:
+      :table: blog_posts2

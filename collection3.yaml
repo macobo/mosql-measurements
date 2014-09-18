@@ -1,5 +1,5 @@
 test_mosql_measurements:
-  test_collection:
+  test_collection3:
     :columns:
     - id:
       :source: _id
@@ -9,4 +9,4 @@ test_mosql_measurements:
       :type: INTEGER
     - title: TEXT
     :meta:
-      :table: blog_posts
+      :table: blog_posts3

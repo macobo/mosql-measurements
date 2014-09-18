@@ -22,13 +22,27 @@ class Array
   end
 end
 
+def fork_pool(n_forks, &blk)
+  if n_forks.is_a? Numeric
+    n_forks = (1..n_forks)
+  end
+  processes = n_forks.map do |i|
+    Process.fork { blk.call(i) }
+  end
+
+  processes.each do |pid|
+    Process.wait(pid)
+    # log.debug("Child #{pid} exited")
+  end
+end
+
 module Utilities
   def log
     return @logger unless @logger.nil?
     @logger = Log4r::Logger.new("Mosql::Measurements")
     outputter = Log4r::StdoutOutputter.new(STDERR)
     outputter.formatter = Log4r::PatternFormatter.new(
-      :pattern => "%d [%l]: %M",
+      :pattern => "(#{child_id}) %d [%l]: %M",
       :date_pattern => "%Y-%m-%d %H:%M:%S.%L")
 
     @logger.outputters = outputter
@@ -117,7 +131,9 @@ module Utilities
 
   def measure_rubyprof(filename)
     result = RubyProf.profile do 
-      yield
+      measure do
+        yield
+      end
     end
     printer = RubyProf::GraphHtmlPrinter.new(result)
     printer.print(File.open(filename+"-graph.html", "w"))
@@ -136,17 +152,5 @@ module Utilities
     end
   end
 
-  def fork_pool(n_forks, &blk)
-    if n_forks.is_a? Numeric
-      n_forks = (1..n_forks)
-    end
-    processes = n_forks.map do |i|
-      Process.fork { blk.call(i) }
-    end
 
-    processes.each do |pid|
-      Process.wait(pid)
-      log.debug("Child #{pid} exited")
-    end
-  end
 end
